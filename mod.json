@@ -1,4 +1,4 @@
-{
+{"settings": {"noclip-enabled": {"type": "bool", "name": "Noclip", "description": "Evita morir.", "default": true}},
 	"geode": "$GEODE_VERSION",
 	"gd": {
 		"win": "2.2081",
