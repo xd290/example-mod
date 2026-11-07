@@ -6,17 +6,23 @@
         "mac": "2.2081",
         "ios": "2.2081"
     },
-    "id": "xd290.frases",
-    "name": "Frases",
+    "id": "xd290.inputbuffer",
+    "name": "Input Buffer",
     "version": "v1.0.0",
     "developer": "xd290",
-    "description": "frases.aleatorias",
+    "description": "Input buffer con 3 niveles.",
     "settings": {
-        "noclip-enabled": {
+        "enabled": {
             "type": "bool",
-            "name": "Noclip",
-            "description": "Evita morir.",
+            "name": "Activar",
             "default": true
+        },
+        "level": {
+            "type": "string",
+            "name": "Nivel de buffer",
+            "description": "Bajo, Medio o Alto.",
+            "default": "Medio",
+            "one-of": ["Bajo", "Medio", "Alto"]
         }
     }
 }
