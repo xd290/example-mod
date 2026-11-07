@@ -8,7 +8,11 @@ using namespace geode::prelude;
 
 class $modify(FrasesPlayLayer, PlayLayer) {
     void destroyPlayer(PlayerObject* player, GameObject* object) {
+        bool yaEstabaMuerto = m_player1->m_isDead;
         PlayLayer::destroyPlayer(player, object);
+
+        // Solo muestra la frase si de verdad acabas de morir
+        if (yaEstabaMuerto || !m_player1->m_isDead) return;
 
         static const std::vector<std::string> frases = {
             "Skill issue",
