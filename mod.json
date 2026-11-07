@@ -10,7 +10,7 @@
     "name": "Frases",
     "version": "v1.0.0",
     "developer": "xd290",
-    "description": "Noclip simple.",
+    "description": "frases.aleatorias",
     "settings": {
         "noclip-enabled": {
             "type": "bool",
