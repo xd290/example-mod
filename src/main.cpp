@@ -6,9 +6,9 @@ using namespace geode::prelude;
 
 static float ventanaBuffer() {
     auto nivel = Mod::get()->getSettingValue<std::string>("level");
-    if (nivel == "Bajo") return 0.03f;
-    if (nivel == "Alto") return 0.10f;
-    return 0.06f; // Medio
+    if (nivel == "Bajo") return 0.10f;
+    if (nivel == "Alto") return 0.50f;
+    return 0.25f; // Medio
 }
 
 static bool modoPermitido(PlayerObject* p) {
