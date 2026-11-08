@@ -21,6 +21,9 @@ static const char* SISTEMA =
     "El nivel debe poder pasarse con un cubo: maximo 3 picos seguidos y al menos 4 columnas libres entre obstaculos. "
     "Ordena las lineas de izquierda a derecha.";
 
+static const char* URL_DEFECTO = "https://openrouter.ai/api/v1/chat/completions";
+static const char* MODELO_DEFECTO = "meta-llama/llama-3.3-70b-instruct:free";
+
 static std::string escapar(std::string const& s) {
     std::string o;
     for (unsigned char c : s) {
@@ -38,20 +41,25 @@ static std::string escapar(std::string const& s) {
     return o;
 }
 
+// Formato OpenAI (sirve para OpenRouter, Groq, Mistral...)
 static std::string armarCuerpo(std::string const& modelo, std::string const& prompt, int maximo) {
     std::string sistema = std::string(SISTEMA) + " Usa como maximo " + std::to_string(maximo) + " lineas.";
     return "{\"model\":\"" + escapar(modelo) + "\","
            "\"max_tokens\":2000,"
-           "\"system\":\"" + escapar(sistema) + "\","
-           "\"messages\":[{\"role\":\"user\",\"content\":\"" + escapar(prompt) + "\"}]}";
+           "\"messages\":["
+           "{\"role\":\"system\",\"content\":\"" + escapar(sistema) + "\"},"
+           "{\"role\":\"user\",\"content\":\"" + escapar(prompt) + "\"}]}";
 }
 
-// Saca el texto de la respuesta de la API
+// Saca choices[0].message.content de la respuesta
 static std::string extraerTexto(std::string const& body) {
-    auto pos = body.find("\"text\"");
+    auto pos = body.find("\"message\"");
     if (pos == std::string::npos) return "";
-    pos = body.find('"', pos + 6);
+    pos = body.find("\"content\"", pos);
     if (pos == std::string::npos) return "";
+    pos += 9;
+    while (pos < body.size() && (body[pos] == ':' || body[pos] == ' ')) pos++;
+    if (pos >= body.size() || body[pos] != '"') return "";
     std::string out;
     for (size_t i = pos + 1; i < body.size(); i++) {
         char c = body[i];
@@ -117,8 +125,8 @@ protected:
 
     void onGuardar(CCObject*) {
         std::string k = std::string(m_input->getString());
-        Mod::get()->setSettingValue<std::string>("api-key", k);
-        auto guardada = Mod::get()->getSettingValue<std::string>("api-key");
+        Mod::get()->setSavedValue<std::string>("clave", k);
+        auto guardada = Mod::get()->getSavedValue<std::string>("clave");
         std::string aviso = "Caja: " + std::to_string(k.size()) +
                             " | Guardada: " + std::to_string(guardada.size());
         Notification::create(aviso, NotificationIcon::Success, 3.f)->show();
@@ -193,38 +201,42 @@ protected:
     void onGenerar(CCObject*) {
         if (m_ocupado) return;
         std::string prompt = std::string(m_input->getString());
-        std::string clave = Mod::get()->getSettingValue<std::string>("api-key");
+        std::string clave = Mod::get()->getSavedValue<std::string>("clave");
         if (clave.empty()) {
-            std::string msg = "Falta la API key (leida: " + std::to_string(clave.size()) + " caracteres)";
-            m_estado->setString(msg.c_str());
+            m_estado->setString("Falta la API key (boton API Key)");
             return;
         }
         if (prompt.empty()) {
             m_estado->setString("Escribe que nivel quieres");
             return;
         }
+
+        std::string url = Mod::get()->getSettingValue<std::string>("url");
+        if (url.empty()) url = URL_DEFECTO;
         std::string modelo = Mod::get()->getSettingValue<std::string>("model");
+        if (modelo.empty()) modelo = MODELO_DEFECTO;
         int maximo = static_cast<int>(Mod::get()->getSettingValue<int64_t>("max-objects"));
+        if (maximo <= 0) maximo = 80;
 
         m_ocupado = true;
         m_estado->setString("Pensando... puede tardar");
 
         auto req = web::WebRequest();
-        req.header("x-api-key", clave);
-        req.header("anthropic-version", "2023-06-01");
+        req.header("Authorization", "Bearer " + clave);
         req.header("content-type", "application/json");
         req.timeout(std::chrono::seconds(90));
         req.bodyString(armarCuerpo(modelo, prompt, maximo));
 
         m_listener.spawn(
-            req.post("https://api.anthropic.com/v1/messages"),
+            req.post(url),
             [this, maximo](web::WebResponse res) {
                 m_ocupado = false;
                 if (!res.ok()) {
                     int code = res.code();
                     std::string msg = "Error " + std::to_string(code);
                     if (code == 401) msg = "API key invalida (401)";
-                    else if (code == 429) msg = "Limite o saldo agotado (429)";
+                    else if (code == 402) msg = "Sin saldo (402)";
+                    else if (code == 429) msg = "Limite alcanzado (429)";
                     else if (code == 404) msg = "Modelo no encontrado (404)";
                     m_estado->setString(msg.c_str());
                     return;
