@@ -118,8 +118,10 @@ protected:
     void onGuardar(CCObject*) {
         std::string k = std::string(m_input->getString());
         Mod::get()->setSettingValue<std::string>("api-key", k);
-        Notification::create("API key guardada", NotificationIcon::Success, 1.5f)->show();
-        this->keyBackClicked();
+        auto guardada = Mod::get()->getSettingValue<std::string>("api-key");
+        std::string aviso = "Caja: " + std::to_string(k.size()) +
+                            " | Guardada: " + std::to_string(guardada.size());
+        Notification::create(aviso, NotificationIcon::Success, 3.f)->show();
     }
 
 public:
@@ -193,7 +195,8 @@ protected:
         std::string prompt = std::string(m_input->getString());
         std::string clave = Mod::get()->getSettingValue<std::string>("api-key");
         if (clave.empty()) {
-            m_estado->setString("Falta la API key (boton API Key)");
+            std::string msg = "Falta la API key (leida: " + std::to_string(clave.size()) + " caracteres)";
+            m_estado->setString(msg.c_str());
             return;
         }
         if (prompt.empty()) {
