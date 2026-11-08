@@ -108,8 +108,8 @@ protected:
         float cx = m_size.width / 2;
 
         m_input = TextInput::create(280.f, "Pega tu API key", "chatFont.fnt");
-        m_input->setPosition({ cx, 95.f });
-        m_mainLayer->addChild(m_input);
+           m_input->setCommonFilter(CommonFilter::Any);
+   m_input->setMaxCharCount(300);
 
         auto menu = CCMenu::create();
         menu->setPosition({ 0.f, 0.f });
@@ -158,7 +158,7 @@ protected:
         float cx = m_size.width / 2;
 
         m_input = TextInput::create(300.f, "Describe tu nivel...", "chatFont.fnt");
-        m_input->setPosition({ cx, 160.f });
+           m_input->setCommonFilter(CommonFilter::Any);
         m_mainLayer->addChild(m_input);
 
         m_estado = CCLabelBMFont::create("", "chatFont.fnt");
