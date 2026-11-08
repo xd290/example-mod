@@ -6,23 +6,31 @@
         "mac": "2.2081",
         "ios": "2.2081"
     },
-    "id": "xd290.inputbuffer",
-    "name": "Input Buffer",
+    "id": "xd290.ianiveles",
+    "name": "IA Niveles",
     "version": "v1.0.0",
     "developer": "xd290",
-    "description": "Input buffer con 3 niveles.",
+    "description": "Genera niveles con IA en el editor.",
     "settings": {
-        "enabled": {
-            "type": "bool",
-            "name": "Activar",
-            "default": true
-        },
-        "level": {
+        "url": {
             "type": "string",
-            "name": "Nivel de buffer",
-            "description": "Bajo, Medio o Alto.",
-            "default": "Medio",
-            "one-of": ["Bajo", "Medio", "Alto"]
+            "name": "URL de la API",
+            "description": "Direccion de la IA (formato OpenAI).",
+            "default": "https://openrouter.ai/api/v1/chat/completions"
+        },
+        "model": {
+            "type": "string",
+            "name": "Modelo",
+            "description": "Modelo de IA que genera el nivel.",
+            "default": "meta-llama/llama-3.3-70b-instruct:free"
+        },
+        "max-objects": {
+            "type": "int",
+            "name": "Maximo de objetos",
+            "description": "Cuantos objetos como maximo pone la IA.",
+            "default": 80,
+            "min": 10,
+            "max": 300
         }
     }
 }
