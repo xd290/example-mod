@@ -1,4 +1,4 @@
-// IA para Geometry Dash (v2): simula el futuro y decide si tocar o no.
+// Piloto IA para Geometry Dash: simula el futuro y decide si tocar o no.
 // La técnica de simulación (jugador falso + checkCollisions + update) está
 // basada en el Show Trajectory de Eclipse Menu (EPL-2.0).
 // Solo actúa en MODO PRÁCTICA.
@@ -24,6 +24,8 @@ namespace ia {
         bool simDead = false;
         bool pressed = false;   // estado real del botón del jugador 1
         float dt = 1.f / 60.f;
+        int lastA = 0;          // frames que sobrevive tocando (último cálculo)
+        int lastB = 0;          // frames que sobrevive soltando (último cálculo)
 
         void init() {
             auto pl = PlayLayer::get();
@@ -85,6 +87,8 @@ namespace ia {
             int tocando = run(base, true);
             int soltando = run(base, false);
             simulating = false;
+            lastA = tocando;
+            lastB = soltando;
             return tocando > soltando; // en empate, no toca
         }
     };
@@ -99,6 +103,14 @@ class $modify(IAPlayLayer, PlayLayer) {
     bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
         if (!PlayLayer::init(level, useReplay, dontCreateObjects)) return false;
         ia::S().init();
+
+        // Texto de estado arriba de la pantalla, para ver si el mod está vivo.
+        auto label = CCLabelBMFont::create("Piloto IA: cargado", "bigFont.fnt");
+        label->setScale(0.4f);
+        label->setID("ia-status"_spr);
+        auto win = CCDirector::get()->getWinSize();
+        label->setPosition({win.width / 2.f, win.height - 15.f});
+        m_uiLayer->addChild(label, 100);
         return true;
     }
 
@@ -210,10 +222,18 @@ class $modify(IAGameLayer, GJBaseGameLayer) {
     void updateCamera(float dt) {
         auto pl = PlayLayer::get();
         auto& s = ia::S();
-        if (pl && s.sim && pl->m_isPracticeMode && !s.simulating && !pl->m_player1->m_isDead) {
-            bool want = s.decide(pl->m_player1);
-            if (want != s.pressed) {
-                this->handleButton(want, 1, true);
+        if (pl && s.sim && !s.simulating) {
+            std::string estado = "Piloto IA: pon modo practica";
+            if (pl->m_isPracticeMode && !pl->m_player1->m_isDead) {
+                bool want = s.decide(pl->m_player1);
+                estado = fmt::format("Piloto IA | tocar {} | soltar {} -> {}",
+                                     s.lastA, s.lastB, want ? "TOCA" : "suelta");
+                if (want != s.pressed) {
+                    this->handleButton(want, 1, true);
+                }
+            }
+            if (auto l = typeinfo_cast<CCLabelBMFont*>(pl->m_uiLayer->getChildByID("ia-status"_spr))) {
+                l->setString(estado.c_str());
             }
         }
         GJBaseGameLayer::updateCamera(dt);
