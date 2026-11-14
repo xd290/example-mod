@@ -1,5 +1,9 @@
 // Piloto IA para Geometry Dash (v3).
-// Simula unas pocas acciones candidatas en modo práctica.
+// Cada frame prueba varios "planes" (cuándo apretar o soltar el botón y por
+// cuánto tiempo) en una simulación y elige uno que sobreviva.
+// La técnica de simulación (jugador falso + checkCollisions + update) está
+// basada en el Show Trajectory de Eclipse Menu (EPL-2.0).
+// Solo actúa en MODO PRÁCTICA.
 
 #include <Geode/Geode.hpp>
 #include <Geode/modify/EffectGameObject.hpp>
@@ -12,84 +16,71 @@
 
 using namespace geode::prelude;
 
-// Las orbes se tratan con APIs públicas. El objetivo es ignorar trampas
-// (special rings) y activar solo orbes válidas, sin tocar campos privados que
-// pueden no existir en esta versión del binding.
-#define IA_ORBES 1
+// En esta versión del bindings de Geode, RingObject no expone los campos
+// m_hasBeenActivated / m_hasBeenActivatedP2, así que la simulación de orbes
+// queda desactivada para que el proyecto compile.
+#define IA_ORBES 0
 
 namespace ia {
-    // Horizonte y cantidad de planes reducidos para limitar trabajo por decisión.
-    constexpr int HORIZON = 90;
-    constexpr int DECISION_INTERVAL = 3;
+    // Cuántos pasos hacia adelante simula cada plan. Si el juego va muy
+    // lento en tu celular, bájalo a 120.
+    constexpr int HORIZON = 150;
 
+    // Un plan cambia el botón en el paso t1 y lo mantiene cambiado por dur
+    // pasos (dur = 0 significa hasta el final).
     struct Plan {
         int t1;
         int dur;
     };
 
-    constexpr int TIMES[] = {0, 7, 16};
-    constexpr int DURS[] = {12, 0};
-
-#if IA_ORBES
-    inline bool ringIsTrap(RingObject* ring) {
-        if (!ring) return true;
-        if constexpr (requires(RingObject* r) { r->isSpecial(); }) {
-            return ring->isSpecial();
-        }
-        return false;
-    }
-
-    inline bool ringShouldTrigger(RingObject* ring, PlayerObject* player) {
-        if (!ring || !player || ringIsTrap(ring)) return false;
-        if constexpr (requires(RingObject* r, PlayerObject* p) {
-            r->collidesWithPlayer(p, 0.016f);
-        }) {
-            return ring->collidesWithPlayer(player, 0.016f);
-        }
-        return true;
-    }
-
-    inline void triggerSafeRing(RingObject* ring, PlayerObject* player) {
-        if (!ring || !player || ringIsTrap(ring)) return;
-        if constexpr (requires(RingObject* r, PlayerObject* p) {
-            r->activate(p);
-        }) {
-            ring->activate(player);
-        }
-    }
-#else
-    inline bool ringIsTrap(RingObject*) { return true; }
-    inline bool ringShouldTrigger(RingObject*, PlayerObject*) { return false; }
-    inline void triggerSafeRing(RingObject*, PlayerObject*) {}
-#endif
+    constexpr int TIMES[] = {0, 4, 9, 16, 28};
+    constexpr int DURS[] = {8, 24, 0};
 
     struct Simulation {
         PlayerObject* sim = nullptr;
         bool simulating = false;
         bool simDead = false;
-        bool pressed = false;
-        bool cachedWant = false;
+        bool pressed = false;   // estado real del botón del jugador 1
         float dt = 1.f / 60.f;
-        int lastScore = 0;
-        int frameCounter = 0;
+        int lastScore = 0;      // cuántos pasos sobrevivió el mejor plan
+
+#if IA_ORBES
+        struct RingSave {
+            RingObject* ring;
+            bool a;
+            bool b;
+        };
+        std::vector<RingSave> ringSaves;
+
+        void saveRing(RingObject* r) {
+            for (auto& s : ringSaves) {
+                if (s.ring == r) return;
+            }
+            ringSaves.push_back({r, r->m_hasBeenActivated, r->m_hasBeenActivatedP2});
+        }
+
+        void restoreRings() {
+            for (auto& s : ringSaves) {
+                s.ring->m_hasBeenActivated = s.a;
+                s.ring->m_hasBeenActivatedP2 = s.b;
+            }
+            ringSaves.clear();
+        }
+#else
+        void saveRing(RingObject*) {}
+        void restoreRings() {}
+#endif
 
         void init() {
             auto pl = PlayLayer::get();
-            if (!pl) return;
             sim = PlayerObject::create(1, 1, pl, pl, true);
-            if (!sim) return;
             sim->setPosition({0, 105});
             sim->setVisible(false);
             sim->setID("ia-sim-player"_spr);
             pl->m_objectLayer->addChild(sim);
-            cachedWant = pressed;
         }
 
-        void quit() {
-            sim = nullptr;
-            simulating = false;
-            frameCounter = 0;
-        }
+        void quit() { sim = nullptr; }
 
         bool isSimDead(PlayerObject* p) {
             if (simulating && p == sim) {
@@ -106,10 +97,9 @@ namespace ia {
             sim->m_collisionLogRight->removeAllObjects();
         }
 
+        // Simula un plan. Devuelve cuántos pasos sobrevive (máximo HORIZON).
         int runPlan(PlayerObject* base, Plan plan) {
             auto pl = PlayLayer::get();
-            if (!pl || !sim) return 0;
-
             simDead = false;
             sim->setVisible(false);
             sim->copyAttributes(base);
@@ -120,7 +110,7 @@ namespace ia {
             if (simPressed) sim->pushButton(PlayerButton::Jump);
 
             int result = HORIZON;
-            for (int i = 0; i < HORIZON; ++i) {
+            for (int i = 0; i < HORIZON; i++) {
                 resetCollisionLog();
                 pl->checkCollisions(sim, dt, false);
                 if (simDead) {
@@ -128,26 +118,27 @@ namespace ia {
                     break;
                 }
 
-                bool inSwitch = i >= plan.t1 &&
-                    (plan.dur == 0 || i < plan.t1 + plan.dur);
+                bool inSwitch = i >= plan.t1 && (plan.dur == 0 || i < plan.t1 + plan.dur);
                 bool want = inSwitch ? !pressed : pressed;
                 if (want != simPressed) {
                     simPressed = want;
-                    if (want) sim->pushButton(PlayerButton::Jump);
-                    else sim->releaseButton(PlayerButton::Jump);
+                    want ? sim->pushButton(PlayerButton::Jump) : sim->releaseButton(PlayerButton::Jump);
                 }
                 sim->update(dt);
             }
+
+            restoreRings();
             return result;
         }
 
+        // Devuelve true si el botón debe quedar apretado en este frame.
         bool decide(PlayerObject* base) {
-            if (!sim || !base) return pressed;
             simulating = true;
 
             int best = -1;
             Plan bestPlan{HORIZON + 1, 0};
             bool done = false;
+
             auto probe = [&](Plan p) {
                 int score = runPlan(base, p);
                 if (score > best) {
@@ -157,7 +148,7 @@ namespace ia {
                 if (score >= HORIZON) done = true;
             };
 
-            probe(Plan{HORIZON + 1, 0});
+            probe(Plan{HORIZON + 1, 0});   // no cambiar nada
             for (int t : TIMES) {
                 for (int d : DURS) {
                     if (done) break;
@@ -168,9 +159,9 @@ namespace ia {
 
             simulating = false;
             lastScore = best;
-            bool changeNow = bestPlan.t1 == 0;
-            cachedWant = changeNow ? !pressed : pressed;
-            return cachedWant;
+
+            bool cambiaAhora = bestPlan.t1 == 0;
+            return cambiaAhora ? !pressed : pressed;
         }
     };
 
@@ -185,6 +176,7 @@ class $modify(IAPlayLayer, PlayLayer) {
         if (!PlayLayer::init(level, useReplay, dontCreateObjects)) return false;
         ia::S().init();
 
+        // Texto de estado arriba de la pantalla, para ver si el mod está vivo.
         auto label = CCLabelBMFont::create("Piloto IA: cargado", "bigFont.fnt");
         label->setScale(0.4f);
         label->setID("ia-status"_spr);
@@ -194,6 +186,7 @@ class $modify(IAPlayLayer, PlayLayer) {
         return true;
     }
 
+    // Si muere el jugador falso, no destruye el real.
     void destroyPlayer(PlayerObject* player, GameObject* gameObject) override {
         if (gameObject != m_anticheatSpike && ia::S().isSimDead(player)) return;
         PlayLayer::destroyPlayer(player, gameObject);
@@ -210,6 +203,7 @@ class $modify(IAPlayLayer, PlayLayer) {
     }
 };
 
+// Lo siguiente evita que la simulación tenga efectos en el juego real.
 class $modify(IAHardStreak, HardStreak) {
     void addPoint(cocos2d::CCPoint p0) {
         if (ia::S().simulating) return;
@@ -245,7 +239,7 @@ class $modify(IAPlayerObject, PlayerObject) {
     void update(float dt) override {
         PlayerObject::update(dt);
         auto pl = PlayLayer::get();
-        if (pl && !ia::S().simulating && pl->m_gameState.m_timeWarp != 0.f) {
+        if (pl && !ia::S().simulating) {
             ia::S().dt = dt / pl->m_gameState.m_timeWarp;
         }
     }
@@ -253,8 +247,9 @@ class $modify(IAPlayerObject, PlayerObject) {
     void ringJump(RingObject* p0, bool p1) {
         if (ia::S().simulating) {
 #if IA_ORBES
-            if (this == ia::S().sim && ia::ringShouldTrigger(p0, this)) {
-                ia::triggerSafeRing(p0, this);
+            if (this == ia::S().sim) {
+                ia::S().saveRing(p0);
+                PlayerObject::ringJump(p0, p1);
             }
 #endif
             return;
@@ -265,7 +260,14 @@ class $modify(IAPlayerObject, PlayerObject) {
 
 class $modify(IAGameLayer, GJBaseGameLayer) {
     bool canBeActivatedByPlayer(PlayerObject* p0, EffectGameObject* p1) {
-        if (ia::S().simulating) return false;
+        if (ia::S().simulating) {
+#if IA_ORBES
+            if (p0 == ia::S().sim && typeinfo_cast<RingObject*>(p1)) {
+                return GJBaseGameLayer::canBeActivatedByPlayer(p0, p1);
+            }
+#endif
+            return false;
+        }
         return GJBaseGameLayer::canBeActivatedByPlayer(p0, p1);
     }
 
@@ -279,25 +281,22 @@ class $modify(IAGameLayer, GJBaseGameLayer) {
         GJBaseGameLayer::flipGravity(p0, p1, p2);
     }
 
+    // Durante la simulación solo cuenta lo que puede matar o bloquear.
     void collisionCheckObjects(PlayerObject* player, gd::vector<GameObject*>* vec, int objectsCount, float dt) {
         if (ia::S().simulating) {
-            gd::vector<GameObject*> relevant;
-            for (int i = 0; i < objectsCount; ++i) {
+            gd::vector<GameObject*> extra;
+            for (int i = 0; i < objectsCount; i++) {
                 GameObject* obj = vec->at(i);
-                auto type = obj->m_objectType;
-                if (type == GameObjectType::Solid ||
-                    type == GameObjectType::Hazard ||
-                    type == GameObjectType::AnimatedHazard ||
-                    type == GameObjectType::Slope) {
-                    relevant.push_back(obj);
-                }
+                bool keep = obj->m_objectType == GameObjectType::Solid ||
+                            obj->m_objectType == GameObjectType::Hazard ||
+                            obj->m_objectType == GameObjectType::AnimatedHazard ||
+                            obj->m_objectType == GameObjectType::Slope;
 #if IA_ORBES
-                else if (auto ring = typeinfo_cast<RingObject*>(obj)) {
-                    if (!ia::ringIsTrap(ring)) relevant.push_back(obj);
-                }
+                if (!keep && typeinfo_cast<RingObject*>(obj)) keep = true;
 #endif
+                if (keep) extra.push_back(obj);
             }
-            GJBaseGameLayer::collisionCheckObjects(player, &relevant, relevant.size(), dt);
+            GJBaseGameLayer::collisionCheckObjects(player, &extra, extra.size(), dt);
             return;
         }
         GJBaseGameLayer::collisionCheckObjects(player, vec, objectsCount, dt);
@@ -306,8 +305,9 @@ class $modify(IAGameLayer, GJBaseGameLayer) {
     void playerTouchedRing(PlayerObject* player, RingObject* ring) {
         if (ia::S().simulating) {
 #if IA_ORBES
-            if (player == ia::S().sim && ia::ringShouldTrigger(ring, player)) {
-                ia::triggerSafeRing(ring, player);
+            if (player == ia::S().sim) {
+                ia::S().saveRing(ring);
+                GJBaseGameLayer::playerTouchedRing(player, ring);
             }
 #endif
             return;
@@ -315,28 +315,21 @@ class $modify(IAGameLayer, GJBaseGameLayer) {
         GJBaseGameLayer::playerTouchedRing(player, ring);
     }
 
+    // Cada frame: prueba los planes y aplica la primera acción del mejor.
     void updateCamera(float dt) {
         auto pl = PlayLayer::get();
         auto& s = ia::S();
         if (pl && s.sim && !s.simulating) {
             std::string estado = "Piloto IA: pon modo practica";
             if (pl->m_isPracticeMode && !pl->m_player1->m_isDead) {
-                if (++s.frameCounter >= ia::DECISION_INTERVAL) {
-                    s.frameCounter = 0;
-                    s.decide(pl->m_player1);
-                }
+                bool want = s.decide(pl->m_player1);
                 estado = fmt::format("Piloto IA | vive {}/{} | {}",
-                                     s.lastScore, ia::HORIZON,
-                                     s.cachedWant ? "TOCA" : "suelta");
-                if (s.cachedWant != s.pressed) {
-                    this->handleButton(s.cachedWant, 1, true);
+                                     s.lastScore, ia::HORIZON, want ? "TOCA" : "suelta");
+                if (want != s.pressed) {
+                    this->handleButton(want, 1, true);
                 }
-            } else {
-                s.frameCounter = 0;
-                s.cachedWant = s.pressed;
             }
-            if (auto l = typeinfo_cast<CCLabelBMFont*>(
-                    pl->m_uiLayer->getChildByID("ia-status"_spr))) {
+            if (auto l = typeinfo_cast<CCLabelBMFont*>(pl->m_uiLayer->getChildByID("ia-status"_spr))) {
                 l->setString(estado.c_str());
             }
         }
