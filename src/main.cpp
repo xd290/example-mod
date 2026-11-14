@@ -14,9 +14,9 @@
 using namespace geode::prelude;
 
 namespace ia {
-    // Cuántos frames hacia adelante simula en cada rama. Si el juego va lento
-    // en tu celular, bájalo (por ejemplo a 40).
-    constexpr int HORIZON = 60;
+    // Cuántos frames hacia adelante simula en cada rama. Más alto = ve más
+    // lejos pero pesa más. Si el juego va lento en tu celular, bájalo a 120.
+    constexpr int HORIZON = 150;
 
     struct Simulation {
         PlayerObject* sim = nullptr;
