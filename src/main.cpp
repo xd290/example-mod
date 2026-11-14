@@ -16,33 +16,34 @@
 
 using namespace geode::prelude;
 
-// En esta versión del bindings de Geode, RingObject no expone los campos
-// m_hasBeenActivated / m_hasBeenActivatedP2, así que la simulación de orbes
-// queda desactivada para que el proyecto compile.
+// Desactivado: esta versión de los bindings no expone los campos de RingObject
+// que necesita restaurar la simulación.
 #define IA_ORBES 0
 
 namespace ia {
-    // Cuántos pasos hacia adelante simula cada plan. Si el juego va muy
-    // lento en tu celular, bájalo a 120.
-    constexpr int HORIZON = 95;
+    // Menos pasos por simulación para reducir el trabajo por decisión.
+    constexpr int HORIZON = 45;
+    // Recalcular cada 3 frames en vez de hacer todas las simulaciones en cada frame.
+    constexpr int DECISION_INTERVAL = 3;
 
-    // Un plan cambia el botón en el paso t1 y lo mantiene cambiado por dur
-    // pasos (dur = 0 significa hasta el final).
     struct Plan {
         int t1;
         int dur;
     };
 
-    constexpr int TIMES[] = {0, 4, 9, 16, 28};
-    constexpr int DURS[] = {8, 24, 0};
+    // Menos planes candidatos = menos llamadas a checkCollisions.
+    constexpr int TIMES[] = {0, 8, 20};
+    constexpr int DURS[] = {12, 0};
 
     struct Simulation {
         PlayerObject* sim = nullptr;
         bool simulating = false;
         bool simDead = false;
         bool pressed = false;   // estado real del botón del jugador 1
+        bool cachedWant = false;
         float dt = 1.f / 60.f;
-        int lastScore = 0;      // cuántos pasos sobrevivió el mejor plan
+        int lastScore = 0;
+        int frameCounter = 0;
 
 #if IA_ORBES
         struct RingSave {
@@ -78,9 +79,13 @@ namespace ia {
             sim->setVisible(false);
             sim->setID("ia-sim-player"_spr);
             pl->m_objectLayer->addChild(sim);
+            cachedWant = pressed;
         }
 
-        void quit() { sim = nullptr; }
+        void quit() {
+            sim = nullptr;
+            frameCounter = 0;
+        }
 
         bool isSimDead(PlayerObject* p) {
             if (simulating && p == sim) {
@@ -131,7 +136,7 @@ namespace ia {
             return result;
         }
 
-        // Devuelve true si el botón debe quedar apretado en este frame.
+        // Devuelve true si el botón debe quedar apretado.
         bool decide(PlayerObject* base) {
             simulating = true;
 
@@ -159,9 +164,9 @@ namespace ia {
 
             simulating = false;
             lastScore = best;
-
             bool cambiaAhora = bestPlan.t1 == 0;
-            return cambiaAhora ? !pressed : pressed;
+            cachedWant = cambiaAhora ? !pressed : pressed;
+            return cachedWant;
         }
     };
 
@@ -176,7 +181,6 @@ class $modify(IAPlayLayer, PlayLayer) {
         if (!PlayLayer::init(level, useReplay, dontCreateObjects)) return false;
         ia::S().init();
 
-        // Texto de estado arriba de la pantalla, para ver si el mod está vivo.
         auto label = CCLabelBMFont::create("Piloto IA: cargado", "bigFont.fnt");
         label->setScale(0.4f);
         label->setID("ia-status"_spr);
@@ -186,7 +190,6 @@ class $modify(IAPlayLayer, PlayLayer) {
         return true;
     }
 
-    // Si muere el jugador falso, no destruye el real.
     void destroyPlayer(PlayerObject* player, GameObject* gameObject) override {
         if (gameObject != m_anticheatSpike && ia::S().isSimDead(player)) return;
         PlayLayer::destroyPlayer(player, gameObject);
@@ -203,7 +206,6 @@ class $modify(IAPlayLayer, PlayLayer) {
     }
 };
 
-// Lo siguiente evita que la simulación tenga efectos en el juego real.
 class $modify(IAHardStreak, HardStreak) {
     void addPoint(cocos2d::CCPoint p0) {
         if (ia::S().simulating) return;
@@ -239,7 +241,7 @@ class $modify(IAPlayerObject, PlayerObject) {
     void update(float dt) override {
         PlayerObject::update(dt);
         auto pl = PlayLayer::get();
-        if (pl && !ia::S().simulating) {
+        if (pl && !ia::S().simulating && pl->m_gameState.m_timeWarp != 0.f) {
             ia::S().dt = dt / pl->m_gameState.m_timeWarp;
         }
     }
@@ -281,10 +283,9 @@ class $modify(IAGameLayer, GJBaseGameLayer) {
         GJBaseGameLayer::flipGravity(p0, p1, p2);
     }
 
-    // Durante la simulación solo cuenta lo que puede matar o bloquear.
     void collisionCheckObjects(PlayerObject* player, gd::vector<GameObject*>* vec, int objectsCount, float dt) {
         if (ia::S().simulating) {
-            gd::vector<GameObject*> extra;
+            gd::vector<GameObject*> relevant;
             for (int i = 0; i < objectsCount; i++) {
                 GameObject* obj = vec->at(i);
                 bool keep = obj->m_objectType == GameObjectType::Solid ||
@@ -294,9 +295,9 @@ class $modify(IAGameLayer, GJBaseGameLayer) {
 #if IA_ORBES
                 if (!keep && typeinfo_cast<RingObject*>(obj)) keep = true;
 #endif
-                if (keep) extra.push_back(obj);
+                if (keep) relevant.push_back(obj);
             }
-            GJBaseGameLayer::collisionCheckObjects(player, &extra, extra.size(), dt);
+            GJBaseGameLayer::collisionCheckObjects(player, &relevant, relevant.size(), dt);
             return;
         }
         GJBaseGameLayer::collisionCheckObjects(player, vec, objectsCount, dt);
@@ -315,19 +316,26 @@ class $modify(IAGameLayer, GJBaseGameLayer) {
         GJBaseGameLayer::playerTouchedRing(player, ring);
     }
 
-    // Cada frame: prueba los planes y aplica la primera acción del mejor.
+    // Ejecuta la búsqueda cara cada 3 frames y reutiliza la acción entre medias.
     void updateCamera(float dt) {
         auto pl = PlayLayer::get();
         auto& s = ia::S();
         if (pl && s.sim && !s.simulating) {
             std::string estado = "Piloto IA: pon modo practica";
             if (pl->m_isPracticeMode && !pl->m_player1->m_isDead) {
-                bool want = s.decide(pl->m_player1);
-                estado = fmt::format("Piloto IA | vive {}/{} | {}",
-                                     s.lastScore, ia::HORIZON, want ? "TOCA" : "suelta");
-                if (want != s.pressed) {
-                    this->handleButton(want, 1, true);
+                if (++s.frameCounter >= ia::DECISION_INTERVAL) {
+                    s.frameCounter = 0;
+                    s.decide(pl->m_player1);
                 }
+                estado = fmt::format("Piloto IA | vive {}/{} | {}",
+                                     s.lastScore, ia::HORIZON,
+                                     s.cachedWant ? "TOCA" : "suelta");
+                if (s.cachedWant != s.pressed) {
+                    this->handleButton(s.cachedWant, 1, true);
+                }
+            } else {
+                s.frameCounter = 0;
+                s.cachedWant = s.pressed;
             }
             if (auto l = typeinfo_cast<CCLabelBMFont*>(pl->m_uiLayer->getChildByID("ia-status"_spr))) {
                 l->setString(estado.c_str());
