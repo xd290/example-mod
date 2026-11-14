@@ -12,9 +12,10 @@
 
 using namespace geode::prelude;
 
-// Los bindings actuales no exponen el estado necesario para simular orbes
-// sin alterar las del nivel.
-#define IA_ORBES 0
+// Las orbes se tratan con APIs públicas. El objetivo es ignorar trampas
+// (special rings) y activar solo orbes válidas, sin tocar campos privados que
+// pueden no existir en esta versión del binding.
+#define IA_ORBES 1
 
 namespace ia {
     // Horizonte y cantidad de planes reducidos para limitar trabajo por decisión.
@@ -28,6 +29,39 @@ namespace ia {
 
     constexpr int TIMES[] = {0, 7, 16};
     constexpr int DURS[] = {12, 0};
+
+#if IA_ORBES
+    inline bool ringIsTrap(RingObject* ring) {
+        if (!ring) return true;
+        if constexpr (requires(RingObject* r) { r->isSpecial(); }) {
+            return ring->isSpecial();
+        }
+        return false;
+    }
+
+    inline bool ringShouldTrigger(RingObject* ring, PlayerObject* player) {
+        if (!ring || !player || ringIsTrap(ring)) return false;
+        if constexpr (requires(RingObject* r, PlayerObject* p) {
+            r->collidesWithPlayer(p, 0.016f);
+        }) {
+            return ring->collidesWithPlayer(player, 0.016f);
+        }
+        return true;
+    }
+
+    inline void triggerSafeRing(RingObject* ring, PlayerObject* player) {
+        if (!ring || !player || ringIsTrap(ring)) return;
+        if constexpr (requires(RingObject* r, PlayerObject* p) {
+            r->activate(p);
+        }) {
+            ring->activate(player);
+        }
+    }
+#else
+    inline bool ringIsTrap(RingObject*) { return true; }
+    inline bool ringShouldTrigger(RingObject*, PlayerObject*) { return false; }
+    inline void triggerSafeRing(RingObject*, PlayerObject*) {}
+#endif
 
     struct Simulation {
         PlayerObject* sim = nullptr;
@@ -120,7 +154,6 @@ namespace ia {
                     best = score;
                     bestPlan = p;
                 }
-                // No need to test more plans if this one survives the horizon.
                 if (score >= HORIZON) done = true;
             };
 
@@ -218,7 +251,14 @@ class $modify(IAPlayerObject, PlayerObject) {
     }
 
     void ringJump(RingObject* p0, bool p1) {
-        if (ia::S().simulating) return;
+        if (ia::S().simulating) {
+#if IA_ORBES
+            if (this == ia::S().sim && ia::ringShouldTrigger(p0, this)) {
+                ia::triggerSafeRing(p0, this);
+            }
+#endif
+            return;
+        }
         PlayerObject::ringJump(p0, p1);
     }
 };
@@ -251,6 +291,11 @@ class $modify(IAGameLayer, GJBaseGameLayer) {
                     type == GameObjectType::Slope) {
                     relevant.push_back(obj);
                 }
+#if IA_ORBES
+                else if (auto ring = typeinfo_cast<RingObject*>(obj)) {
+                    if (!ia::ringIsTrap(ring)) relevant.push_back(obj);
+                }
+#endif
             }
             GJBaseGameLayer::collisionCheckObjects(player, &relevant, relevant.size(), dt);
             return;
@@ -259,7 +304,14 @@ class $modify(IAGameLayer, GJBaseGameLayer) {
     }
 
     void playerTouchedRing(PlayerObject* player, RingObject* ring) {
-        if (ia::S().simulating) return;
+        if (ia::S().simulating) {
+#if IA_ORBES
+            if (player == ia::S().sim && ia::ringShouldTrigger(ring, player)) {
+                ia::triggerSafeRing(ring, player);
+            }
+#endif
+            return;
+        }
         GJBaseGameLayer::playerTouchedRing(player, ring);
     }
 
@@ -269,8 +321,6 @@ class $modify(IAGameLayer, GJBaseGameLayer) {
         if (pl && s.sim && !s.simulating) {
             std::string estado = "Piloto IA: pon modo practica";
             if (pl->m_isPracticeMode && !pl->m_player1->m_isDead) {
-                // Ejecuta la búsqueda cada 3 frames y reutiliza la última acción
-                // en los frames intermedios para evitar picos de CPU.
                 if (++s.frameCounter >= ia::DECISION_INTERVAL) {
                     s.frameCounter = 0;
                     s.decide(pl->m_player1);
