@@ -24,7 +24,7 @@ using namespace geode::prelude;
 namespace ia {
     // Cuántos pasos hacia adelante simula cada plan. Si el juego va muy
     // lento en tu celular, bájalo a 120.
-    constexpr int HORIZON = 150;
+    constexpr int HORIZON = 95;
 
     // Un plan cambia el botón en el paso t1 y lo mantiene cambiado por dur
     // pasos (dur = 0 significa hasta el final).
