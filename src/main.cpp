@@ -1,7 +1,11 @@
 #include <Geode/Geode.hpp>
 #include <Geode/modify/PlayerObject.hpp>
+#include <Geode/modify/PlayLayer.hpp>
+#include <Geode/modify/CCParticleSystem.hpp>
 
 using namespace geode::prelude;
+
+static bool g_ocultarParticulas = false;
 
 class $modify(FPSBoostPlayer, PlayerObject) {
     void update(float dt) {
@@ -33,5 +37,37 @@ class $modify(FPSBoostPlayer, PlayerObject) {
         if (!p) return;
         p->stopSystem();
         p->setVisible(false);
+    }
+};
+
+class $modify(FPSBoostLayer, PlayLayer) {
+    void postUpdate(float dt) {
+        PlayLayer::postUpdate(dt);
+
+        auto mod = Mod::get();
+        g_ocultarParticulas = mod->getSettingValue<bool>("sin-particulas-nivel");
+
+        if (mod->getSettingValue<bool>("ocultar-fondo")) {
+            if (m_background) m_background->setVisible(false);
+            if (m_middleground) m_middleground->setVisible(false);
+        }
+
+        if (mod->getSettingValue<bool>("ocultar-suelo")) {
+            if (m_groundLayer) m_groundLayer->setVisible(false);
+        }
+    }
+
+    void onQuit() {
+        PlayLayer::onQuit();
+        g_ocultarParticulas = false;
+    }
+};
+
+class $modify(FPSBoostParticles, CCParticleSystem) {
+    void update(float dt) {
+        CCParticleSystem::update(dt);
+        if (g_ocultarParticulas) {
+            this->setVisible(false);
+        }
     }
 };
