@@ -1,19 +1,25 @@
 #include <Geode/Geode.hpp>
 #include <Geode/modify/PlayerObject.hpp>
 #include <Geode/modify/PlayLayer.hpp>
+#include <Geode/modify/GameObject.hpp>
 #include <Geode/modify/CCParticleSystem.hpp>
 
 using namespace geode::prelude;
 
 static bool g_ocultarParticulas = false;
+static bool g_ocultarDeco = false;
+
+static bool activo(char const* clave) {
+    auto mod = Mod::get();
+    return mod->getSettingValue<bool>("modo-extremo") ||
+           mod->getSettingValue<bool>(clave);
+}
 
 class $modify(FPSBoostPlayer, PlayerObject) {
     void update(float dt) {
         PlayerObject::update(dt);
 
-        auto mod = Mod::get();
-
-        if (mod->getSettingValue<bool>("sin-particulas")) {
+        if (activo("sin-particulas")) {
             this->apagar(m_playerGroundParticles);
             this->apagar(m_vehicleGroundParticles);
             this->apagar(m_trailingParticles);
@@ -27,7 +33,7 @@ class $modify(FPSBoostPlayer, PlayerObject) {
             this->apagar(m_landParticles1);
         }
 
-        if (mod->getSettingValue<bool>("sin-estelas")) {
+        if (activo("sin-estelas")) {
             if (m_regularTrail) m_regularTrail->setVisible(false);
             if (m_waveTrail) m_waveTrail->setVisible(false);
         }
@@ -44,15 +50,15 @@ class $modify(FPSBoostLayer, PlayLayer) {
     void postUpdate(float dt) {
         PlayLayer::postUpdate(dt);
 
-        auto mod = Mod::get();
-        g_ocultarParticulas = mod->getSettingValue<bool>("sin-particulas-nivel");
+        g_ocultarParticulas = activo("sin-particulas-nivel");
+        g_ocultarDeco = activo("ocultar-decoracion");
 
-        if (mod->getSettingValue<bool>("ocultar-fondo")) {
+        if (activo("ocultar-fondo")) {
             if (m_background) m_background->setVisible(false);
             if (m_middleground) m_middleground->setVisible(false);
         }
 
-        if (mod->getSettingValue<bool>("ocultar-suelo")) {
+        if (activo("ocultar-suelo")) {
             if (m_groundLayer) m_groundLayer->setVisible(false);
         }
     }
@@ -60,6 +66,16 @@ class $modify(FPSBoostLayer, PlayLayer) {
     void onQuit() {
         PlayLayer::onQuit();
         g_ocultarParticulas = false;
+        g_ocultarDeco = false;
+    }
+};
+
+class $modify(FPSBoostObject, GameObject) {
+    void activateObject() {
+        GameObject::activateObject();
+        if (g_ocultarDeco && m_objectType == GameObjectType::Decoration) {
+            this->setVisible(false);
+        }
     }
 };
 
