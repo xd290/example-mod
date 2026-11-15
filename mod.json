@@ -8,13 +8,13 @@
     },
     "id": "xd290.fpsboost",
     "name": "FPS Boost",
-    "version": "v1.0.0",
+    "version": "v1.1.0",
     "developer": "xd290",
-    "description": "Quita partículas y estelas para ganar FPS.",
+    "description": "Quita partículas, estelas y efectos para ganar FPS.",
     "settings": {
         "sin-particulas": {
             "type": "bool",
-            "name": "Quitar partículas",
+            "name": "Quitar partículas del jugador",
             "description": "Desactiva las partículas del jugador",
             "default": true
         },
@@ -22,6 +22,24 @@
             "type": "bool",
             "name": "Quitar estelas",
             "description": "Desactiva la estela normal y la de wave",
+            "default": true
+        },
+        "sin-particulas-nivel": {
+            "type": "bool",
+            "name": "Quitar partículas del nivel",
+            "description": "Esconde todas las partículas mientras juegas",
+            "default": true
+        },
+        "ocultar-fondo": {
+            "type": "bool",
+            "name": "Ocultar fondo",
+            "description": "Quita el fondo y el middleground",
+            "default": true
+        },
+        "ocultar-suelo": {
+            "type": "bool",
+            "name": "Ocultar suelo",
+            "description": "Quita el dibujo del suelo",
             "default": true
         }
     }
