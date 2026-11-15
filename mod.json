@@ -6,38 +6,12 @@
         "mac": "2.2081",
         "ios": "2.2081"
     },
-    "id": "xd290.ianiveles",
-    "name": "pilotoia",
+    "id": "xd290.fpsboost",
+    "name": "FPS Boost",
     "version": "v1.0.0",
     "developer": "xd290",
-    "description": "Genera niveles con IA en el editor.",
+    "description": "Quita partículas y estelas para ganar FPS.",
     "settings": {
-        "url": {
-            "type": "string",
-            "name": "URL de la API",
-            "description": "Direccion de la IA (formato OpenAI).",
-            "default": "https://openrouter.ai/api/v1/chat/completions"
-        },
-        "model": {
-            "type": "string",
-            "name": "Modelo",
-            "description": "Modelo de IA que genera el nivel.",
-            "default": "meta-llama/llama-3.3-70b-instruct:free"
-        },
-        "max-objects": {
-            "type": "int",
-            "name": "Maximo de objetos",
-            "description": "Cuantos objetos como maximo pone la IA.",
-            "default": 80,
-            "min": 10,
-            "max": 300
-        },
-        "fps-boost": {
-            "type": "bool",
-            "name": "FPS Boost",
-            "description": "Activa la optimización",
-            "default": true
-        },
         "sin-particulas": {
             "type": "bool",
             "name": "Quitar partículas",
