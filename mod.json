@@ -1,36 +1,18 @@
-{
-    "geode": "5.9.0",
-    "gd": {
-        "win": "2.2081",
-        "android": "2.2081",
-        "mac": "2.2081",
-        "ios": "2.2081"
-    },
-    "id": "xd290.ianiveles",
-    "name": "pilotoia",
-    "version": "v1.0.0",
-    "developer": "xd290",
-    "description": "Genera niveles con IA en el editor.",
-    "settings": {
-        "url": {
-            "type": "string",
-            "name": "URL de la API",
-            "description": "Direccion de la IA (formato OpenAI).",
-            "default": "https://openrouter.ai/api/v1/chat/completions"
-        },
-        "model": {
-            "type": "string",
-            "name": "Modelo",
-            "description": "Modelo de IA que genera el nivel.",
-            "default": "meta-llama/llama-3.3-70b-instruct:free"
-        },
-        "max-objects": {
-            "type": "int",
-            "name": "Maximo de objetos",
-            "description": "Cuantos objetos como maximo pone la IA.",
-            "default": 80,
-            "min": 10,
-            "max": 300
-        }
-    }
+"fps-boost": {
+    "name": "FPS Boost",
+    "description": "Activa la optimización",
+    "type": "bool",
+    "default": true
+},
+"sin-particulas": {
+    "name": "Quitar partículas",
+    "description": "Desactiva las partículas del jugador",
+    "type": "bool",
+    "default": true
+},
+"sin-estelas": {
+    "name": "Quitar estelas",
+    "description": "Desactiva la estela normal y la de wave",
+    "type": "bool",
+    "default": true
 }
