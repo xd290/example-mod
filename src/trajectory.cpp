@@ -1,4 +1,4 @@
-#include "src/trajectory.hpp"
+#include "trajectory.hpp"
 
 bool BotTrajectory::iterate(GJBaseGameLayer* pl, PlayerObject* player, std::vector<TrajectoryPlayerData>& cached, const PredictionConfig& config) {
     if (!pl || !player) return false;
