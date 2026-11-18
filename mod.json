@@ -1,57 +1,48 @@
 {
-    "geode": "5.9.0",
+    "geode": "v1.8.0",
     "gd": {
-        "win": "2.2081",
-        "android": "2.2081",
-        "mac": "2.2081",
-        "ios": "2.2081"
+        "android": "2.2081"
     },
-    "id": "xd290.fpsboost",
-    "name": "FPS Boost",
-    "version": "v1.2.0",
+    "id": "xd290.fps-bot",
+    "name": "FPS Boost y Bot",
+    "version": "v1.0.0",
     "developer": "xd290",
-    "description": "Quita partículas, estelas y efectos para ganar FPS.",
+    "description": "Mod que mejora los FPS y añade una trayectoria de bot.",
     "settings": {
         "modo-extremo": {
+            "name": "Modo Extremo",
+            "description": "Activa todas las opciones de FPS.",
             "type": "bool",
-            "name": "Modo extremo",
-            "description": "Quita todo lo innecesario: fondo, suelo, partículas, estelas y decoración",
             "default": false
         },
         "sin-particulas": {
+            "name": "Sin particulas del jugador",
             "type": "bool",
-            "name": "Quitar partículas del jugador",
-            "description": "Desactiva las partículas del jugador",
             "default": true
         },
         "sin-estelas": {
+            "name": "Sin estelas (trails)",
             "type": "bool",
-            "name": "Quitar estelas",
-            "description": "Desactiva la estela normal y la de wave",
             "default": true
         },
         "sin-particulas-nivel": {
+            "name": "Sin particulas del nivel",
             "type": "bool",
-            "name": "Quitar partículas del nivel",
-            "description": "Esconde todas las partículas mientras juegas",
-            "default": true
-        },
-        "ocultar-fondo": {
-            "type": "bool",
-            "name": "Ocultar fondo",
-            "description": "Quita el fondo y el middleground",
-            "default": true
-        },
-        "ocultar-suelo": {
-            "type": "bool",
-            "name": "Ocultar suelo",
-            "description": "Quita el dibujo del suelo",
-            "default": true
+            "default": false
         },
         "ocultar-decoracion": {
+            "name": "Ocultar decoracion",
             "type": "bool",
-            "name": "Ocultar decoración",
-            "description": "Esconde los objetos que son solo adorno",
+            "default": false
+        },
+        "ocultar-fondo": {
+            "name": "Ocultar fondo",
+            "type": "bool",
+            "default": false
+        },
+        "ocultar-suelo": {
+            "name": "Ocultar suelo",
+            "type": "bool",
             "default": false
         }
     }
