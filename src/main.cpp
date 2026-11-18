@@ -3,6 +3,7 @@
 #include <Geode/modify/PlayLayer.hpp>
 #include <Geode/modify/GameObject.hpp>
 #include <Geode/modify/CCParticleSystem.hpp>
+#include "trajectory.hpp"
 
 using namespace geode::prelude;
 
@@ -15,6 +16,9 @@ static bool activo(char const* clave) {
            mod->getSettingValue<bool>(clave);
 }
 
+// ==========================================
+// TU CÓDIGO DE FPSBOOST (INTACTO)
+// ==========================================
 class $modify(FPSBoostPlayer, PlayerObject) {
     void update(float dt) {
         PlayerObject::update(dt);
@@ -85,5 +89,42 @@ class $modify(FPSBoostParticles, CCParticleSystem) {
         if (g_ocultarParticulas) {
             this->setVisible(false);
         }
+    }
+};
+
+// ==========================================
+// NUEVO CÓDIGO DEL BOT
+// ==========================================
+class $modify(BotLayer, PlayLayer) {
+    struct Fields {
+        std::vector<TrajectoryPlayerData> m_cachedTrajectory;
+        cocos2d::CCDrawNode* m_drawNode = nullptr;
+        PredictionConfig m_config;
+        bool m_botEnabled = true; // Cambiar a true para probar el bot
+    };
+
+    bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
+        if (!PlayLayer::init(level, useReplay, dontCreateObjects)) return false;
+        
+        m_fields->m_drawNode = cocos2d::CCDrawNode::create();
+        this->addChild(m_fields->m_drawNode, 100); 
+        return true;
+    }
+
+    void postUpdate(float dt) {
+        PlayLayer::postUpdate(dt);
+        
+        if (!m_fields->m_botEnabled || !m_player1) return;
+
+        // 1. Limpiar y calcular la nueva trayectoria
+        m_fields->m_cachedTrajectory.clear();
+        for (int i = 0; i < m_fields->m_config.m_maxLength; ++i) {
+            if (!BotTrajectory::iterate(this, m_player1, m_fields->m_cachedTrajectory, m_fields->m_config)) {
+                break; 
+            }
+        }
+
+        // 2. Dibujar la línea
+        BotTrajectory::drawTrajectory(m_fields->m_drawNode, m_fields->m_cachedTrajectory);
     }
 };
